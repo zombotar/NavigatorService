@@ -38,8 +38,6 @@ namespace WcfService1
             result.resultCode = -1;
             var x = MyClass.Instance;
 
-            
-
             return result;
         }
     }
