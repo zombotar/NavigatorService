@@ -60,4 +60,20 @@ namespace WcfService1
         [DataMember]
         public int userId { get; set; }
     }
+
+    [DataContract]
+    public class File
+    {
+        [DataMember]
+        public int ID { get; set; }
+
+        [DataMember]
+        public string FILENAME { get; set; }
+
+        [DataMember]
+        public int FILESIZE { get; set; }
+
+        [DataMember]
+        public byte[] DATA { get; set; }
+    }
 }

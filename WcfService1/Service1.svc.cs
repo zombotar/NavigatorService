@@ -61,12 +61,98 @@ namespace WcfService1
             return id;
         }
 
+        private List<int> GetGroupIDs(int _id)
+        {
+            List<int> groupsIds = new List<int>();
+
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select gr.id from groups gr inner join user_to_group u_to_g on gr.id = u_to_g.groupid inner join users u on u.id = u_to_g.userid where u.id =  {1} ;", _id);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+
+            try
+            {
+                int id = -1;
+                connection.Open();
+                var result = command.ExecuteReader();
+                while (result.Read())
+                {
+                    id = Int32.Parse(result["id"].ToString());
+                    groupsIds.Add(id);
+                }
+            }
+            catch (Exception e)
+            {
+
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            return groupsIds;
+        }
+
+        public bool CheckCert()
+        {
+            return true;
+        }
+
         public AuthenticationResult Authentication(string _username, string _p_hash)
         {
             AuthenticationResult result = new AuthenticationResult();
             result.resultCode = -1;
             var x = MyClass.Instance;
             result.userId = GetUserID(_username, _p_hash);
+            if (result.userId > 0 && CheckCert())
+            {
+                result.resultCode = 0;
+            }
+            return result;
+        }
+
+        public List<File> GetAvailableListOfFiles(int _id)
+        {
+            List<File> files = new List<File>();
+
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select gr.id from groups gr inner join user_to_group u_to_g on gr.id = u_to_g.groupid inner join users u on u.id = u_to_g.userid where u.id =  {1} ;", _id);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+
+            try
+            {
+                int id = -1;
+                connection.Open();
+                var result = command.ExecuteReader();
+                while (result.Read())
+                {
+                    id = Int32.Parse(result["id"].ToString());
+                    //groupsIds.Add(id);
+                }
+            }
+            catch (Exception e)
+            {
+
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            return files;
+        }
+
+        public AddFileResult AddFile(File file, int _idUser, int _idGroup, int _accessBitset)
+        {
+            AddFileResult result = new AddFileResult();
+            result.errMessage = "";
+            result.resultCode = -1;
+
+
+
             return result;
         }
     }
