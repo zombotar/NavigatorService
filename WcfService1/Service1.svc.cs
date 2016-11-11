@@ -32,6 +32,63 @@ namespace WcfService1
             return composite;
         }
 
+        public void WriteToLogTable(string _message)
+        {
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = " insert into LOG_TABLE (userid, groupid, date_time, value) values (0, null, datetime('now'), \"{0}\"); ";
+            commandText = String.Format(commandText, _message);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+
+            try
+            {
+                connection.Open();
+                var result = command.ExecuteNonQuery();
+            }
+            catch (Exception e)
+            {
+
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
+        public void WriteToLogTable(string _message, int _idUser, int _idGroup)
+        {
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = "";
+            if (_idGroup > 0)
+            {
+                commandText = " insert into LOG_TABLE (userid, groupid, date_time, value) values ({0}, {1}, datetime('now'), \"{2}\"); ";
+                commandText = String.Format(commandText, _idUser, _idGroup, _message);
+            } else
+            {
+                commandText = " insert into LOG_TABLE (userid, groupid, date_time, value) values ({0}, null, datetime('now'), \"{1}\"); ";
+                commandText = String.Format(commandText, _idUser, _message);
+            }
+            
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+
+            try
+            {
+                connection.Open();
+                var result = command.ExecuteNonQuery();
+            }
+            catch (Exception e)
+            {
+
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
         private int GetUserID(string _username, string _p_hash)
         {
             int id = -1;
@@ -132,9 +189,32 @@ namespace WcfService1
             result.resultCode = -1;
             var x = MyClass.Instance;
             result.userId = GetUserID(_username, _p_hash);
-            if (result.userId > 0 && CheckCert())
+            bool isCertChecked = CheckCert();
+            if (result.userId > 0 && isCertChecked)
             {
                 result.resultCode = 0;
+            } 
+            if (result.userId < 0)
+            {
+                WriteToLogTable("user with name = \"" + _username + "\" and passwordHash = \"" + _p_hash + "\" not found!");
+            }
+            if (!isCertChecked)
+            {
+                if (result.userId < 0)
+                {
+                    WriteToLogTable("user with name = \"" + _username + "\" and passwordHash = \"" + _p_hash + "\" has provided unvalid certificate!");
+                }
+                else
+                {
+                    var grouplist = GetGroupIDs(result.userId);
+                    if (grouplist != null && grouplist.Count > 0)
+                    {
+                        WriteToLogTable("user with name = \"" + _username + "\" and passwordHash = \"" + _p_hash + "\" has provided unvalid certificate!", result.userId, grouplist.ElementAt(0));
+                    } else
+                    {
+                        WriteToLogTable("user with name = \"" + _username + "\" and passwordHash = \"" + _p_hash + "\" has provided unvalid certificate!", result.userId, -1);
+                    }
+                }
             }
             return result;
         }
