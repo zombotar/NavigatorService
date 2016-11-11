@@ -61,6 +61,33 @@ namespace WcfService1
             return id;
         }
 
+        private bool isExistsUser(int _id)
+        {
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select * from USERS where id = {0} ;", _id);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+
+            try
+            {
+                connection.Open();
+                var result = command.ExecuteReader();
+                if (result.Read())
+                    return true;
+                else
+                    return false;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
         private List<int> GetGroupIDs(int _id)
         {
             List<int> groupsIds = new List<int>();
@@ -150,9 +177,91 @@ namespace WcfService1
             AddFileResult result = new AddFileResult();
             result.errMessage = "";
             result.resultCode = -1;
+            int idFileMeta = -1;
 
+            if (isExistsUser(_idUser))
+            {
+                SQLiteConnection connection =
+                    new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+                string commandText = "";
+                string commandText2 = "";
+                string errCommandText = "";
+                errCommandText = " insert into LOG_TABLE (userid, groupid, date_time, value) values ({0}, {1}, datetime('now'), \"error when add new file: {2}, cause {3} \"); ";
+                if (_idGroup != -1)
+                {
+                    commandText = String.Format(" insert into FILE_META (filepath, filesize, ownerid, groupid, access_bitset) values (\"{0}\", {1}, {2}, {3}, {4} ); select last_insert_rowid() as id; ", MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME, file.FILESIZE, _idUser, _idGroup, _accessBitset);
+                    commandText2 = String.Format(" insert into LOG_TABLE (userid, groupid, date_time, value) values ({0}, {1}, datetime('now'), \"add new file: {2} \"); ", _idUser, _idGroup, MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME);
+                     //, _idUser, _idGroup, MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME;
+                }
+                else
+                {
+                    commandText = String.Format(" insert into FILE_META (filepath, filesize, ownerid, groupid, access_bitset) values (\"{0}\", {1}, {2}, \"{3}\", {4} ); select last_insert_rowid() as id; ", MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME, file.FILESIZE, _idUser, "null", _accessBitset);
+                    commandText2 = String.Format(" insert into LOG_TABLE (userid, groupid, date_time, value) values ({0}, \"{1}\", datetime('now'), \"add new file: {2} \"); ", _idUser, "null", MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME);
+                }
 
+                try
+                {
+                    FileStream newFile = System.IO.File.Create(MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME);
+                    byte[] secretKey = Crypto.GenerateKey(MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + Path.GetFileNameWithoutExtension(file.FILENAME) + ".key");
+                    byte[] encryptFile = null;
+                    Crypto.AES_Encrypt(file.DATA, ref encryptFile, secretKey);
+                    newFile.Write(encryptFile, 0, file.FILESIZE);
+                    newFile.Flush();
+                    newFile.Close();
+                } catch (Exception e)
+                {
+                    result.errMessage = "Ошибка при записи файла!";
+                    if (_idGroup != -1)
+                    {
+                        errCommandText = String.Format(errCommandText, _idUser, _idGroup, MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME, e.Message);
+                    } else
+                    {
+                        errCommandText = String.Format(errCommandText, _idUser, "null", MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName + file.FILENAME, e.Message);
+                    }
+                    try
+                    {
+                        SQLiteCommand command =
+                        new SQLiteCommand(errCommandText, connection);
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                    } catch (Exception ee)
+                    {
+                        result.errMessage += "\nОшибка при записи в лог!";
+                    }
+                    return result;
+                }
 
+                try
+                {
+                    SQLiteCommand command =
+                        new SQLiteCommand(commandText, connection);
+                    connection.Open();
+                    var resultComand = command.ExecuteReader();
+                    if (resultComand.Read())
+                    {
+                        idFileMeta = Int32.Parse(resultComand["id"].ToString());
+                    }
+
+                    command =
+                        new SQLiteCommand(commandText2, connection);
+                    command.ExecuteNonQuery();
+
+                } catch (Exception e)
+                {
+                    result.errMessage = "Ошибка при вставке в ACL таблицу!";
+                    return result;
+                }
+                finally
+                {
+                    connection.Close();
+                }
+
+                result.fileID = idFileMeta;
+                result.resultCode = 0;
+                return result;
+            }
+
+            result.errMessage = "Не найден пользователь с таким id!";
             return result;
         }
     }

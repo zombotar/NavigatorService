@@ -76,4 +76,17 @@ namespace WcfService1
         [DataMember]
         public byte[] DATA { get; set; }
     }
+
+    [DataContract]
+    public class AddFileResult
+    {
+        [DataMember]
+        public int resultCode { get; set; }
+
+        [DataMember]
+        public int fileID { get; set; }
+
+        [DataMember]
+        public string errMessage { get; set; }
+    }
 }
