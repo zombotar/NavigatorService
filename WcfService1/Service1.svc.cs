@@ -145,13 +145,13 @@ namespace WcfService1
             }
         }
 
-        private List<int> GetGroupIDs(int _id)
+        private List<int> GetGroupIDs(int _idUser)
         {
             List<int> groupsIds = new List<int>();
 
             SQLiteConnection connection =
                 new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
-            string commandText = String.Format("select gr.id from groups gr inner join user_to_group u_to_g on gr.id = u_to_g.groupid inner join users u on u.id = u_to_g.userid where u.id =  {1} ;", _id);
+            string commandText = String.Format("select gr.id from groups gr inner join user_to_group u_to_g on gr.id = u_to_g.groupid inner join users u on u.id = u_to_g.userid where u.id =  {1} ;", _idUser);
             SQLiteCommand command =
                 new SQLiteCommand(commandText, connection);
 
@@ -202,7 +202,7 @@ namespace WcfService1
             {
                 if (result.userId < 0)
                 {
-                    WriteToLogTable("user with name = \"" + _username + "\" and passwordHash = \"" + _p_hash + "\" has provided unvalid certificate!");
+                    WriteToLogTable("unknown user with name = \"" + _username + "\" and passwordHash = \"" + _p_hash + "\" has provided unvalid certificate!");
                 }
                 else
                 {
@@ -219,25 +219,36 @@ namespace WcfService1
             return result;
         }
 
-        public List<File> GetAvailableListOfFiles(int _id)
+        /*public List<File> GetAvailableListOfFiles(int _idUser)
         {
             List<File> files = new List<File>();
+            List<int> groupIDs = GetGroupIDs(_idUser);
+
+            return files;
+        }*/
+
+        public ObjectInfo IsObjectExists(int _id, bool _isDirectory)
+        {
+            ObjectInfo result = new ObjectInfo();
+            result.isExists = false;
+            result.id = _id;
 
             SQLiteConnection connection =
                 new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
-            string commandText = String.Format("select gr.id from groups gr inner join user_to_group u_to_g on gr.id = u_to_g.groupid inner join users u on u.id = u_to_g.userid where u.id =  {1} ;", _id);
+            string commandText = String.Format("select filepath from FILE_META where id = {0} and directory_flag = {1};", _id, (_isDirectory == true ? 1 : 0));
             SQLiteCommand command =
                 new SQLiteCommand(commandText, connection);
-
+            string filepath = "";
             try
             {
-                int id = -1;
+                
                 connection.Open();
-                var result = command.ExecuteReader();
-                while (result.Read())
+                var reader1 = command.ExecuteReader();
+                if (reader1.Read())
                 {
-                    id = Int32.Parse(result["id"].ToString());
-                    //groupsIds.Add(id);
+                    filepath = reader1["filepath"].ToString();
+                    result.filePath = filepath;
+                    result.isExists = true;
                 }
             }
             catch (Exception e)
@@ -249,11 +260,177 @@ namespace WcfService1
                 connection.Close();
             }
 
-            return files;
+            connection.Close();
+
+            bool isExistOnFileSystem = false;
+            if (_isDirectory)
+            {
+                isExistOnFileSystem = Directory.Exists(filepath);
+            }
+            else
+            {
+                FileInfo file = new FileInfo(filepath);
+                isExistOnFileSystem = file.Exists;
+            }
+
+            result.isExists = (result.isExists && isExistOnFileSystem);
+
+            return result;
         }
+
+        public ObjectInfo IsObjectExists(string _path, bool _isDirectory)
+        {
+            ObjectInfo result = new ObjectInfo();
+            result.isExists = false;
+            result.filePath = _path;
+
+            bool isExistOnFileSystem = false;
+            if (_isDirectory)
+            {
+                isExistOnFileSystem = Directory.Exists(_path);
+            } else
+            {
+                FileInfo file = new FileInfo(_path);
+                isExistOnFileSystem = file.Exists;
+            }
+
+            SQLiteConnection connection = 
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select id from FILE_META where filepath = \"{0}\" and directory_flag = {1};", _path, (_isDirectory == true ? 1 : 0));
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+            try
+            {
+                int id = -1;
+                connection.Open();
+                var reader1 = command.ExecuteReader();
+                if (reader1.Read())
+                {
+                    id = Int32.Parse(reader1["id"].ToString());
+                    result.id = id;
+                    result.isExists = (true && isExistOnFileSystem);
+                }
+            }
+            catch (Exception e)
+            {
+
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            connection.Close();
+            return result;
+        }
+
+        public int CheckOwner(int _idUser, int _idObject)
+        {
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select * from FILE_META where id = {0} and ownerid = {1}; ", _idObject, _idUser);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+            try
+            {
+                int access_bitset = 0;
+                connection.Open();
+                var reader1 = command.ExecuteReader();
+                if (reader1.Read())
+                {
+                    access_bitset = Int32.Parse(reader1["access_bitset"].ToString());
+                    return (access_bitset & 48); // owner only
+                }
+            }
+            catch (Exception e)
+            {
+                return -1;
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            return -1;
+        }
+
+        private BrowserDataInfo MakeDirsAndFilesList(string _path)
+        {
+            //1 - dirs
+            // проверить по id членство в группах
+            // забить флаги доступности (или проверить сразу)
+            BrowserDataInfo result = new BrowserDataInfo();
+            result.mDirectories = new List<MyDirectoryInfo>();
+            string[] stringDirectories = Directory.GetDirectories(_path);
+
+            //loop throught all directories
+            foreach (string stringDir in stringDirectories)
+            {
+                MyDirectoryInfo metaNodeDir = new MyDirectoryInfo();
+                DirectoryInfo systemNodeDir = new DirectoryInfo(stringDir);
+                metaNodeDir.mDirectoryInfo = systemNodeDir;
+                var objectMeta = IsObjectExists(_path, true);
+                if (objectMeta.isExists)
+                {
+                    metaNodeDir.mMetaObject = objectMeta;
+                    result.mDirectories.Add(metaNodeDir);
+                }
+            }
+
+            string[] stringFiles = Directory.GetFiles(_path);
+            foreach(string stringFile in stringFiles)
+            {
+                MyFileInfo metaNodeFile = new MyFileInfo();
+                FileInfo systemNodeFile = new FileInfo(stringFile);
+                metaNodeFile.mFileInfo = systemNodeFile;
+                var objectMeta = IsObjectExists(_path, false);
+                if (objectMeta.isExists)
+                {
+                    metaNodeFile.mMetaObject = objectMeta;
+                    result.mFiles.Add(metaNodeFile);
+                }
+            }
+
+            return result;
+        }
+
+        public BrowserDataInfo GetListOfData(int _idUser, string _path)
+        {
+            BrowserDataInfo result = new BrowserDataInfo();
+            var objectInfo = IsObjectExists(_path, true);
+            if (!objectInfo.isExists)
+            {
+                result.mErrCode = -1;
+                result.mErrMessage = "Ошибка! Не существует каталога!";
+                return result;
+            }
+
+            var groupIds = GetGroupIDs(_idUser);
+
+            bool access = false;
+            int ownerAccess = CheckOwner(_idUser, objectInfo.id);
+            if (ownerAccess > 0)
+            {
+                if ((ownerAccess & 32) != 0)
+                {
+                    access = true;
+                    result = MakeDirsAndFilesList(_path);
+                    result.mErrCode = 0;
+                    return result;
+                }
+            }
+
+            
+
+            return result;
+        } 
 
         public AddFileResult AddFile(File file, int _idUser, int _idGroup, int _accessBitset)
         {
+            // должна быть проверка, на существование такого же файла перед тем, как его добавить (дабы копии не плодить)
+            // или предупреждать что-ли
+            // а вот логическое И должно помочь в моменте
+            // который касается того, что в 9 случаях разрешено, в одном - нет
             AddFileResult result = new AddFileResult();
             result.errMessage = "";
             result.resultCode = -1;
@@ -400,7 +577,7 @@ namespace WcfService1
                 "CREATE TABLE IF NOT EXISTS \"USERS\" (\"id\" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL , \"name\" TEXT NOT NULL , \"p_hash\" BLOB NOT NULL  UNIQUE ); " +
                 "CREATE TABLE IF NOT EXISTS \"GROUPS\" (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \"groupname\" TEXT NOT NULL); " +
                 "CREATE TABLE IF NOT EXISTS \"USER_TO_GROUP\" (\"userid\" INTEGER, \"groupid\" INTEGER, PRIMARY KEY (userid, groupid), FOREIGN KEY (userid) REFERENCES USERS(id), FOREIGN KEY (groupid) REFERENCES GROUPS(id) ); " +
-                "CREATE TABLE IF NOT EXISTS \"FILE_META\" (\"id\" INTEGER PRIMARY KEY  AUTOINCREMENT NOT NULL, \"filepath\" TEXT, \"filesize\" INTEGER, \"ownerid\" INTEGER, \"groupid\" INTEGER, \"access_bitset\" INTEGER NOT NULL, FOREIGN KEY (ownerid) REFERENCES USERS(id), FOREIGN KEY (groupid) REFERENCES GROUPS(id) );" +
+                "CREATE TABLE IF NOT EXISTS \"FILE_META\" (\"id\" INTEGER PRIMARY KEY  AUTOINCREMENT NOT NULL, \"directory_flag\" INTEGER, \"filepath\" TEXT, \"filesize\" INTEGER, \"ownerid\" INTEGER, \"groupid\" INTEGER, \"access_bitset\" INTEGER NOT NULL, FOREIGN KEY (ownerid) REFERENCES USERS(id), FOREIGN KEY (groupid) REFERENCES GROUPS(id) );" +
                 "CREATE TABLE IF NOT EXISTS \"LOG_TABLE\" (\"id\" INTEGER PRIMARY KEY AUTOINCREMENT, \"userid\" INTEGER NOT NULL, \"groupid\" INTEGER, \"date_time\" TEXT, \"value\" TEXT, \"sql_value\" TEXT, FOREIGN KEY (userid) REFERENCES USERS(id) );"
                 );
             SQLiteCommand command =
@@ -410,6 +587,56 @@ namespace WcfService1
             {
                 connection.Open();
                 command.ExecuteNonQuery();
+
+                string commandText2 = String.Format("select * from users; ");
+                SQLiteCommand command1 =
+                    new SQLiteCommand(commandText2, connection);
+                var reader1 = command1.ExecuteReader();
+                if (!reader1.Read())
+                {
+                    commandText2 = String.Format("insert into USERS (name, p_hash) values (\"admin\", \"21232f297a57a5a743894a0e4a801fc3\"); ");
+                    SQLiteCommand command2 =
+                    new SQLiteCommand(commandText2, connection);
+                    command2.ExecuteNonQuery();
+                }
+
+                commandText2 = String.Format("select * from groups; ");
+                SQLiteCommand command3 =
+                    new SQLiteCommand(commandText2, connection);
+                var reader2 = command3.ExecuteReader();
+                if (!reader2.Read())
+                {
+                    commandText2 = String.Format("insert into GROUPS (groupname) values (\"admin\"); ");
+                    SQLiteCommand command4 =
+                    new SQLiteCommand(commandText2, connection);
+                    command4.ExecuteNonQuery();
+                }
+
+                commandText2 = String.Format("select * from user_to_group; ");
+                SQLiteCommand command5 =
+                    new SQLiteCommand(commandText2, connection);
+                var reader3 = command5.ExecuteReader();
+                if (!reader3.Read())
+                {
+                    commandText2 = String.Format("insert into user_to_group (userid, groupid) values (1, 1); ");
+                    SQLiteCommand command6 =
+                    new SQLiteCommand(commandText2, connection);
+                    command6.ExecuteNonQuery();
+                }
+
+                commandText2 = String.Format("select * from file_meta; ");
+                SQLiteCommand command7 =
+                    new SQLiteCommand(commandText2, connection);
+                var reader4 = command7.ExecuteReader();
+                if (!reader4.Read())
+                {
+                    commandText2 = String.Format("insert into FILE_META (directory_flag, filepath, filesize, ownerid, groupid, access_bitset) values (1, \"{0}\", 0, 1, null, 63); ", currentDirectory + mainDirectoryName);
+                    SQLiteCommand command8 =
+                    new SQLiteCommand(commandText2, connection);
+                    command8.ExecuteNonQuery();
+                }
+
+                
             } catch (Exception e)
             {
                 

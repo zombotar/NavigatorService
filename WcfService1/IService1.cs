@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.ServiceModel;
@@ -75,6 +76,15 @@ namespace WcfService1
 
         [DataMember]
         public byte[] DATA { get; set; }
+
+        [DataMember]
+        public int OWNER_ID { get; set; }
+
+        [DataMember]
+        public Nullable<int> GROUP_ID { get; set; } 
+
+        [DataMember]
+        public int ACCESS_BITSET { get; set; }
     }
 
     [DataContract]
@@ -88,5 +98,58 @@ namespace WcfService1
 
         [DataMember]
         public string errMessage { get; set; }
+    }
+
+    [DataContract]
+    public class BrowserDataInfo
+    {
+        [DataMember]
+        public List<MyFileInfo> mFiles { get; set; }
+
+        [DataMember]
+        public List<MyDirectoryInfo> mDirectories { get; set; }
+
+        [DataMember]
+        public int mErrCode { get; set; }
+
+        [DataMember]
+        public string mErrMessage { get; set; }
+    }
+
+    public class MyFileInfo
+    {
+        public FileInfo mFileInfo { get; set; }
+
+        public MyFileInfo()
+        {
+            mFileInfo = null;
+        }
+
+        public MyFileInfo(string path)
+        {
+            mFileInfo = new FileInfo(path);
+        }
+    }
+
+    public class MyDirectoryInfo
+    {
+        public DirectoryInfo mDirectoryInfo { get; set; }
+
+        public MyDirectoryInfo()
+        {
+            mDirectoryInfo = null;
+        }
+
+        public MyDirectoryInfo(string path)
+        {
+            mDirectoryInfo = new DirectoryInfo(path);
+        }
+    }
+
+    public class ObjectInfo
+    {
+        public string filePath { get; set; }
+        public int id { get; set; }
+        public bool isExists { get; set; }
     }
 }
