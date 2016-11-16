@@ -573,63 +573,12 @@ namespace WcfService1
                 return result;
             }
 
-            var groupIds = GetGroupIDs(_idUser);
-
-            // неправильно! а как же доступ для остальных, группы
-            // миша, всё хуйня. давай по новой
-            // array_merge - какой-нить
-            bool access = false;
-            int ownerAccess = CheckOwnerAccess(_idUser, objectInfo.id);
-            if (ownerAccess > 0)
-            {
-                if ((ownerAccess & 32) != 0)
-                {
-                    access = true;
-                    result = MakeDirsAndFilesList(_path); // здесь тоже лажа на самом деле
-                    // СТОООП. ИЛИ не хуйня?!?!?!?!
-                    result.mErrCode = 0;
-                    return result;
-                }
-            }
-
-            // проверяем группы
-            foreach (var currGroup in groupIds)
-            {
-                int currAccess = CheckGroupAccess(_idUser, currGroup, objectInfo.id);
-                if (currAccess > 0)
-                {
-                    if ((currAccess & GROUP_READ) != 0)
-                    {
-                        access = true;
-                    }
-                    else
-                    {
-                        access = false;
-                        break;
-                    }
-                } else
-                {
-                    access = false;
-                    break;
-                }
-            }
-
+            bool access = CheckACL(_idUser, objectInfo.id, READ);
             if (access)
             {
-                result = MakeDirsAndFilesList(_path); // здесь тоже лажа на самом деле
+                result = MakeDirsAndFilesList(_path); 
                 result.mErrCode = 0;
                 return result;
-            }
-
-            int otherAccess = CheckOtherAccess(_idUser, objectInfo.id);
-            if (otherAccess > 0)
-            {
-                if ((otherAccess & OTHER_READ) != 0)
-                {
-                    result = MakeDirsAndFilesList(_path); // здесь тоже лажа на самом деле
-                    result.mErrCode = 0;
-                    return result;
-                }
             }
             
 
