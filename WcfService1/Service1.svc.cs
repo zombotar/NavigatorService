@@ -570,7 +570,7 @@ namespace WcfService1
                 DirectoryInfo parentDir = dir.Parent;
                 if (parentDir != null)
                 {
-                    return parentDir.FullName + "\\";
+                    return parentDir.FullName;
                 }
             }
             return null;
