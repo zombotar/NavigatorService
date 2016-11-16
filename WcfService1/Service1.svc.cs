@@ -14,6 +14,21 @@ namespace WcfService1
     // ПРИМЕЧАНИЕ. Чтобы запустить клиент проверки WCF для тестирования службы, выберите элементы Service1.svc или Service1.svc.cs в обозревателе решений и начните отладку.
     public class Service1 : IService1
     {
+        public static int OWNER_MASK = 48;
+        public static int GROUP_MASK = 12;
+        public static int OTHER_MASK = 3;
+
+        public static int OWNER_READ = 32;
+        public static int OWNER_WRITE = 16;
+        public static int GROUP_READ = 8;
+        public static int GROUP_WRITE = 4;
+        public static int OTHER_READ = 2;
+        public static int OTHER_WRITE = 1;
+
+        public static int READ = 32;
+        public static int WRITE = 16;
+        public static int READ_AND_WRITE = READ | WRITE;
+
         public string GetData(int value)
         {
             return string.Format("You entered: {0}", value);
@@ -151,7 +166,7 @@ namespace WcfService1
 
             SQLiteConnection connection =
                 new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
-            string commandText = String.Format("select gr.id from groups gr inner join user_to_group u_to_g on gr.id = u_to_g.groupid inner join users u on u.id = u_to_g.userid where u.id =  {1} ;", _idUser);
+            string commandText = String.Format("select gr.id from groups gr inner join user_to_group u_to_g on gr.id = u_to_g.groupid inner join users u on u.id = u_to_g.userid where u.id =  {0} ;", _idUser);
             SQLiteCommand command =
                 new SQLiteCommand(commandText, connection);
 
@@ -324,7 +339,7 @@ namespace WcfService1
             return result;
         }
 
-        public int CheckOwner(int _idUser, int _idObject)
+        public int CheckOwnerAccess(int _idUser, int _idObject)
         {
             SQLiteConnection connection =
                 new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
@@ -354,6 +369,66 @@ namespace WcfService1
             return -1;
         }
 
+        public int CheckGroupAccess(int _idUser, int _idGroup, int _idObject)
+        {
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select * from FILE_META where id = {0} and ifnull(groupid, -1) = {1}; ", _idObject, _idGroup);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+            try
+            {
+                int access_bitset = 0;
+                connection.Open();
+                var reader1 = command.ExecuteReader();
+                if (reader1.Read())
+                {
+                    access_bitset = Int32.Parse(reader1["access_bitset"].ToString());
+                    return (access_bitset & 12); // group only
+                }
+            }
+            catch (Exception e)
+            {
+                return -1;
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            return -1;
+        }
+
+        public int CheckOtherAccess(int _idUser, int _idObject)
+        {
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select * from FILE_META where id = {0} ; ", _idObject);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+            try
+            {
+                int access_bitset = 0;
+                connection.Open();
+                var reader1 = command.ExecuteReader();
+                if (reader1.Read())
+                {
+                    access_bitset = Int32.Parse(reader1["access_bitset"].ToString());
+                    return (access_bitset & OTHER_MASK); // other only
+                }
+            }
+            catch (Exception e)
+            {
+                return -1;
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            return -1;
+        }
+
         private BrowserDataInfo MakeDirsAndFilesList(string _path)
         {
             //1 - dirs
@@ -369,7 +444,8 @@ namespace WcfService1
                 MyDirectoryInfo metaNodeDir = new MyDirectoryInfo();
                 DirectoryInfo systemNodeDir = new DirectoryInfo(stringDir);
                 metaNodeDir.mDirectoryInfo = systemNodeDir;
-                var objectMeta = IsObjectExists(_path, true);
+                var objectMeta = IsObjectExists(stringDir, true);
+                objectMeta.isDirectory = true;
                 if (objectMeta.isExists)
                 {
                     metaNodeDir.mMetaObject = objectMeta;
@@ -377,13 +453,15 @@ namespace WcfService1
                 }
             }
 
+            result.mFiles = new List<MyFileInfo>();
             string[] stringFiles = Directory.GetFiles(_path);
             foreach(string stringFile in stringFiles)
             {
                 MyFileInfo metaNodeFile = new MyFileInfo();
                 FileInfo systemNodeFile = new FileInfo(stringFile);
                 metaNodeFile.mFileInfo = systemNodeFile;
-                var objectMeta = IsObjectExists(_path, false);
+                var objectMeta = IsObjectExists(stringFile, false);
+                objectMeta.isDirectory = false;
                 if (objectMeta.isExists)
                 {
                     metaNodeFile.mMetaObject = objectMeta;
@@ -392,6 +470,96 @@ namespace WcfService1
             }
 
             return result;
+        }
+
+        public BrowserDataInfo AfterAuth(int _idUser)
+        {
+            var rootFilepath = MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName;
+            var result = GetListOfData(_idUser, rootFilepath);
+            result.rootPath = rootFilepath;
+            return result;
+        }
+
+        public bool CheckACL(int _idUser, int _idObject, int _perms)
+        {
+            int permMask = _perms;
+            if (permMask < 0 || permMask > 48)
+                return false;
+            bool access = false; // может более информативное возвращаемое значение?
+            SQLiteConnection connection =
+                new SQLiteConnection(string.Format("Data Source={0};", MyClass.Instance.currentDirectory + MyClass.Instance.databaseName));
+            string commandText = String.Format("select * from FILE_META where id = {0};", _idObject);
+            SQLiteCommand command =
+                new SQLiteCommand(commandText, connection);
+            try
+            {
+                connection.Open();
+                var reader1 = command.ExecuteReader();
+                if (reader1.Read())
+                {
+                    int resultAccess = Int32.Parse(reader1["access_bitset"].ToString());
+                    // if user is owner
+                    int ownerID = -1;
+                    try
+                    {
+                        ownerID = Int32.Parse(reader1["ownerid"].ToString());
+                    } catch (Exception e1)
+                    {
+                        ownerID = -1;
+                    }
+                    if (ownerID == _idUser)
+                    {
+                        resultAccess = resultAccess & permMask;
+                        if (resultAccess != 0)
+                        {
+                            access = true;
+                        }
+                        return access;
+                    }
+                    // if user in group: owner
+                    permMask = permMask >> 2;
+                    var groupIds = GetGroupIDs(_idUser);
+                    int objectGroupID = -1;
+                    try
+                    {
+                        objectGroupID = Int32.Parse(reader1["groupid"].ToString());
+                    }
+                    catch (Exception e2)
+                    {
+                        objectGroupID = -1;
+                    }
+                    if (groupIds != null && objectGroupID != -1 && groupIds.Contains(objectGroupID))
+                    {
+                        resultAccess = resultAccess & permMask;
+                        if (resultAccess != 0)
+                        {
+                            access = true;
+                        }
+                        return access;
+                    }
+                    // if user in group: other 
+                    permMask = permMask >> 2;
+                    resultAccess = resultAccess & permMask;
+                    if (resultAccess != 0)
+                    {
+                        access = true;
+                    }
+                    return access;
+                }
+            }
+            catch (Exception e)
+            {
+
+            }
+            finally
+            {
+                connection.Close();
+            }
+
+            connection.Close();
+
+            return false;
+
         }
 
         public BrowserDataInfo GetListOfData(int _idUser, string _path)
@@ -407,19 +575,62 @@ namespace WcfService1
 
             var groupIds = GetGroupIDs(_idUser);
 
+            // неправильно! а как же доступ для остальных, группы
+            // миша, всё хуйня. давай по новой
+            // array_merge - какой-нить
             bool access = false;
-            int ownerAccess = CheckOwner(_idUser, objectInfo.id);
+            int ownerAccess = CheckOwnerAccess(_idUser, objectInfo.id);
             if (ownerAccess > 0)
             {
                 if ((ownerAccess & 32) != 0)
                 {
                     access = true;
-                    result = MakeDirsAndFilesList(_path);
+                    result = MakeDirsAndFilesList(_path); // здесь тоже лажа на самом деле
+                    // СТОООП. ИЛИ не хуйня?!?!?!?!
                     result.mErrCode = 0;
                     return result;
                 }
             }
 
+            // проверяем группы
+            foreach (var currGroup in groupIds)
+            {
+                int currAccess = CheckGroupAccess(_idUser, currGroup, objectInfo.id);
+                if (currAccess > 0)
+                {
+                    if ((currAccess & GROUP_READ) != 0)
+                    {
+                        access = true;
+                    }
+                    else
+                    {
+                        access = false;
+                        break;
+                    }
+                } else
+                {
+                    access = false;
+                    break;
+                }
+            }
+
+            if (access)
+            {
+                result = MakeDirsAndFilesList(_path); // здесь тоже лажа на самом деле
+                result.mErrCode = 0;
+                return result;
+            }
+
+            int otherAccess = CheckOtherAccess(_idUser, objectInfo.id);
+            if (otherAccess > 0)
+            {
+                if ((otherAccess & OTHER_READ) != 0)
+                {
+                    result = MakeDirsAndFilesList(_path); // здесь тоже лажа на самом деле
+                    result.mErrCode = 0;
+                    return result;
+                }
+            }
             
 
             return result;

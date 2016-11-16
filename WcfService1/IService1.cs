@@ -23,6 +23,9 @@ namespace WcfService1
         [OperationContract]
         CompositeType GetDataUsingDataContract(CompositeType composite);
 
+        [OperationContract]
+        BrowserDataInfo AfterAuth(int _idUser);
+
         // TODO: Добавьте здесь операции служб
     }
 
@@ -114,11 +117,15 @@ namespace WcfService1
 
         [DataMember]
         public string mErrMessage { get; set; }
+
+        [DataMember]
+        public string rootPath { get; set; }
     }
 
     public class MyFileInfo
     {
         public FileInfo mFileInfo { get; set; }
+        public ObjectInfo mMetaObject { get; set; }
 
         public MyFileInfo()
         {
@@ -134,6 +141,7 @@ namespace WcfService1
     public class MyDirectoryInfo
     {
         public DirectoryInfo mDirectoryInfo { get; set; }
+        public ObjectInfo mMetaObject { get; set; }
 
         public MyDirectoryInfo()
         {
@@ -151,5 +159,6 @@ namespace WcfService1
         public string filePath { get; set; }
         public int id { get; set; }
         public bool isExists { get; set; }
+        public bool isDirectory { get; set; }
     }
 }
