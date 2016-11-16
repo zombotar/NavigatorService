@@ -26,6 +26,8 @@ namespace WcfService1
         [OperationContract]
         BrowserDataInfo AfterAuth(int _idUser);
 
+        [OperationContract]
+        BrowserDataInfo GetListOfData(int _idUser, string _path);
         // TODO: Добавьте здесь операции служб
     }
 

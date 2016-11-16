@@ -562,6 +562,20 @@ namespace WcfService1
 
         }
 
+        public string UpParentFolder(String path)
+        {
+            if (path != null)
+            {
+                DirectoryInfo dir = new DirectoryInfo(path);
+                DirectoryInfo parentDir = dir.Parent;
+                if (parentDir != null)
+                {
+                    return parentDir.FullName + "\\";
+                }
+            }
+            return null;
+        }
+
         public BrowserDataInfo GetListOfData(int _idUser, string _path)
         {
             BrowserDataInfo result = new BrowserDataInfo();
@@ -572,12 +586,15 @@ namespace WcfService1
                 result.mErrMessage = "Ошибка! Не существует каталога!";
                 return result;
             }
-
+            result.mDirectories = new List<MyDirectoryInfo>();
+            result.mFiles = new List<MyFileInfo>();
             bool access = CheckACL(_idUser, objectInfo.id, READ);
             if (access)
             {
                 result = MakeDirsAndFilesList(_path); 
                 result.mErrCode = 0;
+                string root = UpParentFolder(_path);
+                result.rootPath = (root != null ? root : _path);
                 return result;
             }
             
