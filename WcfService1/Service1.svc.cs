@@ -582,6 +582,15 @@ namespace WcfService1
             var objectInfo = IsObjectExists(_path, true);
             if (!objectInfo.isExists)
             {
+                result.currPath = _path;
+                string root = "";
+                if (_path.Equals(MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName)){
+                    root = _path;
+                } else
+                {
+                    root = UpParentFolder(_path);
+                }
+                result.rootPath = (root != null ? root : _path);
                 result.mErrCode = -1;
                 result.mErrMessage = "Ошибка! Не существует каталога!";
                 return result;
@@ -593,9 +602,33 @@ namespace WcfService1
             {
                 result = MakeDirsAndFilesList(_path); 
                 result.mErrCode = 0;
-                string root = UpParentFolder(_path);
+                result.currPath = _path;
+                string root = "";
+                if (_path.Equals(MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName)){
+                    root = _path;
+                }
+                else
+                {
+                    root = UpParentFolder(_path);
+                }
                 result.rootPath = (root != null ? root : _path);
-                return result;
+                //return result;
+            }
+            else
+            {
+                result.mErrCode = -2;
+                result.mErrMessage = "В доступе отказано!";
+                result.currPath = _path;
+                string root = "";
+                if (_path.Equals(MyClass.Instance.currentDirectory + MyClass.Instance.mainDirectoryName)){
+                    root = _path;
+                }
+                else
+                {
+                    root = UpParentFolder(_path);
+                }
+                result.rootPath = (root != null ? root : _path);
+                //return result;
             }
             
 

@@ -122,6 +122,9 @@ namespace WcfService1
 
         [DataMember]
         public string rootPath { get; set; }
+
+        [DataMember]
+        public string currPath { get; set; }
     }
 
     public class MyFileInfo
