@@ -1,0 +1,16 @@
+[ODBC]
+DRIVER=Driver do Microsoft Paradox (*.db )
+UID=admin
+UserCommitSync=Yes
+Threads=3
+SafeTransactions=0
+ParadoxUserName=admin
+ParadoxNetStyle=4.x
+ParadoxNetPath=C:\WINDOWS\system32
+PageTimeout=5
+MaxScanRows=8
+MaxBufferSize=2048
+FIL=Paradox 5.X
+DriverId=538
+DefaultDir=C:\Users\VasiliyHome\Desktop\CyberMercenary\WcfService1\WcfService1
+CollatingSequence=ASCII
